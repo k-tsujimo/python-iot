@@ -7,6 +7,7 @@ from sys import stdout, stdin, stderr
 import pymysql.cursors
 import datetime
 from decimal import Decimal
+from urllib.parse import urlparse
 
 
 def write_log(line):
@@ -19,37 +20,38 @@ def write_log(line):
         sys.exit(1)
 
 
-def open_serial():
+def open_serial(port):
     # シリアルポートを開く
     try:
-        ser = Serial(serialport)
-        write_log('open serial port: {}'.format(serialport))
+        ser = Serial(port)
+        write_log('open serial port: {}'.format(port))
         return ser
 
     except:
-        write_log('cannot open serial port: {}'.format(serialport))
+        write_log('cannot open serial port: {}'.format(port))
         sys.exit(1)
 
 def close_serial(ser):
     ser.close()
-    write_log('close serial port: {}'.format(serialport))
+    write_log('close serial port: {}'.format(str(ser)))
 
 
-def connect_mysql():
+def connect_mysql(url):
     # connect to Mysql
+    u = urlparse(url)
     try:
         conn = pymysql.connect(
-    		host = hostname,
-		port = 3306,
-		user = username,
-		password = password,
-		database = 'iot', 
+    		host = u.hostname or 'localhost',
+		port = u.port or 3306,
+		user = u.username or 'root',
+		password = u.password or 'password',
+		database = u.path[1:] or 'database', 
         	charset='utf8mb4',
         	cursorclass=pymysql.cursors.DictCursor,
         )
         return conn
     except:
-        write_log('cannot connect to mysql server {}'.format(hostname))
+        write_log('cannot connect to mysql server {}'.format(url))
         sys.exit(1)
 
 
@@ -85,7 +87,7 @@ def scan_serial(ser):
                                  "datetime": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                 #print(new_posts)
                 try:
-                    conn = connect_mysql()
+                    conn = connect_mysql(url)
                      
                     with conn.cursor() as cursor:
                         # Create a new record
@@ -126,15 +128,13 @@ def daemonize(ser):
 if __name__ == '__main__':
     # パラメータの確認
     #   第一引数: シリアルポート名
-    if len(sys.argv) != 5:
-        write_log('serial port name: {}'.format(sys.argv[0]))
+    if len(sys.argv) != 3:
+        write_log('serial port name and url are needed: {}'.format(sys.argv[0]))
         exit(1) 
 
+    url = sys.argv[2]
     serialport = sys.argv[1]
-    hostname = sys.argv[2]
-    username = sys.argv[3]
-    password = sys.argv[4] 
 
-    ser = open_serial()
+    ser = open_serial(serialport)
     daemonize(ser)
 
